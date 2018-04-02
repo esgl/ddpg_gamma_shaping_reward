@@ -6,14 +6,20 @@ import numpy as np
 
 from baselines.common.misc_util import (set_global_seeds, boolean_flag)
 from baselines import logger, bench
-from baselines.ddpg.models import Actor, Critic
-from baselines.ddpg.memory import Memory
-from baselines.ddpg.noise import *
-import baselines.ddpg.training as training
+# from baselines.ddpg.models import Actor, Critic
+from models import Actor, Critic
+# from baselines.ddpg.memory import Memory
+from Memory import Memory
+# from baselines.ddpg.noise import *
+from noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
+# import baselines.ddpg.training as training
+import training_reward_shaping
 
+import training
 import tensorflow as tf
 from mpi4py import MPI
 
+option = 2
 
 def run(env_id, seed, noise_type, layer_norm, evaluation, memory_limit, **kwargs):
     rank = MPI.COMM_WORLD.Get_rank()
@@ -52,8 +58,8 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, memory_limit, **kwargs
                                                         sigma=float(stddev)*np.ones(nb_actions))
         else:
             raise RuntimeError('unknown noise type "{}"'.format(current_noise_type))
-
-    memory = Memory(limit=memory_limit, action_shape=env.action_space.shape,
+    print(type(memory_limit), memory_limit)
+    memory = Memory(limit=int(memory_limit), action_shape=env.action_space.shape,
                     observation_shape=env.observation_space.shape)
     critic = Critic(layer_norm=layer_norm)
     actor = Actor(nb_actions, layer_norm=layer_norm)
@@ -68,8 +74,15 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, memory_limit, **kwargs
 
     if rank == 0:
         start_time = time.time()
-    training.train(env=env, eval_env=eval_env, param_noise=param_noise,
-                   action_noise=action_noise, actor=actor, critic=critic, memory=memory, **kwargs)
+
+    if option == 1:
+        training.train(env=env, eval_env=eval_env, param_noise=param_noise,
+                       action_noise=action_noise, actor=actor, critic=critic,
+                       memory=memory, **kwargs)
+    elif option == 2:
+        training_reward_shaping.train(env=env, eval_env=eval_env, param_noise=param_noise,
+                       action_noise=action_noise, actor=actor, critic=critic,
+                       memory=memory, **kwargs)
     env.close()
     if eval_env is not None:
         eval_env.close()
